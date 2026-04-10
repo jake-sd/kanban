@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kanban Board</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f3f0;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --border: rgba(0,0,0,0.10);
+    --border-mid: rgba(0,0,0,0.18);
+    --text: #1a1a18;
+    --text-secondary: #6b6b65;
+    --text-tertiary: #9e9d97;
+    --accent: #2563eb;
+    --accent-bg: #eff4ff;
+    --danger: #dc2626;
+    --radius-md: 8px;
+    --radius-lg: 14px;
+    --font: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18181b;
+      --surface: #27272a;
+      --surface2: #1f1f22;
+      --border: rgba(255,255,255,0.10);
+      --border-mid: rgba(255,255,255,0.18);
+      --text: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --text-tertiary: #71717a;
+      --accent: #60a5fa;
+      --accent-bg: #1e3a5f;
+      --danger: #f87171;
+    }
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 18px 24px 14px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+  #save-ind {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .board {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    overflow-x: auto;
+    align-items: flex-start;
+    min-height: calc(100vh - 56px);
+  }
+
+  .col {
+    flex: 0 0 250px;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .col-header {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-secondary);
+    padding-bottom: 10px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .col-count {
+    font-size: 11px;
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  .card {
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    cursor: grab;
+    border-left-width: 3px;
+    border-left-style: solid;
+    position: relative;
+    transition: box-shadow 0.15s;
+  }
+  .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card:active { cursor: grabbing; }
+  .card.dragging { opacity: 0.35; }
+  .card-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+    padding-right: 46px;
+    line-height: 1.4;
+  }
+  .card-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin-bottom: 6px;
+    word-break: break-word;
+  }
+  .card-desc ul, .card-desc ol { padding-left: 16px; }
+  .card-desc a { color: var(--accent); }
+  .card-due { font-size: 11px; color: var(--text-tertiary); }
+  .card-due.overdue { color: var(--danger); font-weight: 500; }
+  .card-actions {
+    position: absolute;
+    top: 8px; right: 8px;
+    display: none;
+    gap: 4px;
+  }
+  .card:hover .card-actions { display: flex; }
+  .card-btn {
+    background: var(--surface);
+    border: 0.5px solid var(--border-mid);
+    border-radius: 4px;
+    width: 22px; height: 22px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary);
+    transition: background 0.1s;
+  }
+  .card-btn:hover { background: var(--bg); }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border-mid);
+    border-radius: var(--radius-md);
+    height: 48px;
+    display: none;
+    transition: background 0.1s;
+  }
+  .drop-zone.visible { display: block; background: var(--accent-bg); }
+
+  .add-btn {
+    margin-top: 4px;
+    width: 100%;
+    background: transparent;
+    border: 0.5px dashed var(--border-mid);
+    border-radius: var(--radius-md);
+    padding: 7px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-family: var(--font);
+  }
+  .add-btn:hover { background: var(--surface2); color: var(--text-secondary); }
+
+  /* Modal */
+  .modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 100;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 16px 40px;
+    overflow-y: auto;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 0.5px solid var(--border-mid);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    width: 400px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+  .modal h3 { font-size: 15px; font-weight: 600; }
+  .modal label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 5px; }
+  .modal input, .modal textarea, .modal select {
+    width: 100%;
+    font-family: var(--font);
+    font-size: 13px;
+    background: var(--surface2);
+    border: 0.5px solid var(--border-mid);
+    border-radius: var(--radius-md);
+    padding: 7px 10px;
+    color: var(--text);
+    outline: none;
+  }
+  .modal input:focus, .modal textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+  }
+
+  /* WYSIWYG */
+  .wysiwyg-wrap {
+    border: 0.5px solid var(--border-mid);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .wysiwyg-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+  .wysiwyg-toolbar {
+    display: flex;
+    gap: 2px;
+    padding: 6px 8px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--surface2);
+    flex-wrap: wrap;
+  }
+  .tb-btn {
+    background: transparent;
+    border: 0.5px solid transparent;
+    border-radius: 4px;
+    width: 26px; height: 26px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary);
+    font-family: var(--font);
+    transition: background 0.1s;
+  }
+  .tb-btn:hover { background: var(--surface); border-color: var(--border); }
+  .tb-btn.active { background: var(--surface); border-color: var(--border-mid); color: var(--text); }
+  .tb-sep { width: 0.5px; background: var(--border); margin: 2px 4px; align-self: stretch; }
+  .wysiwyg-editor {
+    padding: 9px 11px;
+    min-height: 90px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    outline: none;
+    background: var(--surface2);
+  }
+  .wysiwyg-editor ul, .wysiwyg-editor ol { padding-left: 18px; }
+  .wysiwyg-editor a { color: var(--accent); }
+
+  /* Colors */
+  .color-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-swatch {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s;
+  }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.selected { border-color: var(--text); }
+
+  /* Buttons */
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .btn-cancel {
+    background: transparent;
+    border: 0.5px solid var(--border-mid);
+    border-radius: var(--radius-md);
+    padding: 7px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-family: var(--font);
+  }
+  .btn-cancel:hover { background: var(--surface2); }
+  .btn-save {
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 7px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #fff;
+    font-weight: 500;
+    font-family: var(--font);
+    transition: opacity 0.1s;
+  }
+  .btn-save:hover { opacity: 0.88; }
+
+  /* Link modal */
+  .link-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .link-modal.open { display: flex; }
+  .link-box {
+    background: var(--surface);
+    border: 0.5px solid var(--border-mid);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .link-box h4 { font-size: 14px; font-weight: 600; }
+  .link-actions { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header>
+  <h1>Kanban Board</h1>
+  <span id="save-ind"></span>
+</header>
+
+<div class="board" id="board">
+  <div class="col" data-col="not-started" ondragover="onDragOver(event)" ondrop="onDrop(event,'not-started')" ondragleave="onDragLeave(event)">
+    <div class="col-header">Not started <span class="col-count" id="cnt-not-started">0</span></div>
+    <div class="cards" id="cards-not-started"></div>
+    <div class="drop-zone" id="dz-not-started"></div>
+    <button class="add-btn" onclick="openModal('not-started')">+ Add card</button>
+  </div>
+  <div class="col" data-col="in-progress" ondragover="onDragOver(event)" ondrop="onDrop(event,'in-progress')" ondragleave="onDragLeave(event)">
+    <div class="col-header">In progress <span class="col-count" id="cnt-in-progress">0</span></div>
+    <div class="cards" id="cards-in-progress"></div>
+    <div class="drop-zone" id="dz-in-progress"></div>
+    <button class="add-btn" onclick="openModal('in-progress')">+ Add card</button>
+  </div>
+  <div class="col" data-col="needs-req" ondragover="onDragOver(event)" ondrop="onDrop(event,'needs-req')" ondragleave="onDragLeave(event)">
+    <div class="col-header">Needs requirements <span class="col-count" id="cnt-needs-req">0</span></div>
+    <div class="cards" id="cards-needs-req"></div>
+    <div class="drop-zone" id="dz-needs-req"></div>
+    <button class="add-btn" onclick="openModal('needs-req')">+ Add card</button>
+  </div>
+  <div class="col" data-col="finished" ondragover="onDragOver(event)" ondrop="onDrop(event,'finished')" ondragleave="onDragLeave(event)">
+    <div class="col-header">Finished <span class="col-count" id="cnt-finished">0</span></div>
+    <div class="cards" id="cards-finished"></div>
+    <div class="drop-zone" id="dz-finished"></div>
+    <button class="add-btn" onclick="openModal('finished')">+ Add card</button>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-title">Add card</h3>
+    <div>
+      <label>Title</label>
+      <input type="text" id="f-title" placeholder="Card title" />
+    </div>
+    <div>
+      <label>Description</label>
+      <div class="wysiwyg-wrap">
+        <div class="wysiwyg-toolbar">
+          <button class="tb-btn" data-cmd="bold" title="Bold" onclick="fmt('bold')"><b>B</b></button>
+          <button class="tb-btn" data-cmd="italic" title="Italic" onclick="fmt('italic')"><i>I</i></button>
+          <button class="tb-btn" data-cmd="underline" title="Underline" onclick="fmt('underline')" style="text-decoration:underline">U</button>
+          <button class="tb-btn" data-cmd="strikeThrough" title="Strikethrough" onclick="fmt('strikeThrough')" style="text-decoration:line-through">S</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" title="Bullet list" onclick="fmt('insertUnorderedList')">&#8226;&#8212;</button>
+          <button class="tb-btn" title="Numbered list" onclick="fmt('insertOrderedList')">1&#8212;</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" title="Add link" onclick="openLinkModal()">&#128279;</button>
+          <button class="tb-btn" title="Remove link" onclick="fmt('unlink')">&#128280;</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" title="Clear formatting" onclick="fmt('removeFormat')">&#10006;</button>
+        </div>
+        <div class="wysiwyg-editor" id="f-desc" contenteditable="true" spellcheck="true"></div>
+      </div>
+    </div>
+    <div>
+      <label>Due date</label>
+      <input type="date" id="f-due" />
+    </div>
+    <div>
+      <label>Color</label>
+      <div class="color-row" id="color-row"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveCard()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Link Modal -->
+<div class="link-modal" id="link-modal">
+  <div class="link-box">
+    <h4>Insert link</h4>
+    <div>
+      <label>URL</label>
+      <input type="url" id="link-url" placeholder="https://" />
+    </div>
+    <div>
+      <label>Display text (optional)</label>
+      <input type="text" id="link-text" placeholder="Leave blank to use selection" />
+    </div>
+    <div class="link-actions">
+      <button class="btn-cancel" onclick="closeLinkModal()">Cancel</button>
+      <button class="btn-save" onclick="insertLink()">Insert</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS=[
+  {hex:'#888780'},{hex:'#2563eb'},{hex:'#0d9e75'},{hex:'#65a30d'},
+  {hex:'#d97706'},{hex:'#ea580c'},{hex:'#db2777'},{hex:'#7c3aed'},{hex:'#dc2626'}
+];
+const STORAGE_KEY='kanban-v1';
+let cards={},editingId=null,currentCol=null,selectedColor=COLORS[1].hex,dragId=null,savedSel=null;
+
+// Build color swatches
+const colorRow=document.getElementById('color-row');
+COLORS.forEach(c=>{
+  const sw=document.createElement('div');
+  sw.className='color-swatch'+(c.hex===selectedColor?' selected':'');
+  sw.style.background=c.hex;
+  sw.onclick=()=>{
+    selectedColor=c.hex;
+    document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('selected'));
+    sw.classList.add('selected');
+  };
+  colorRow.appendChild(sw);
+});
+
+function fmt(cmd){document.getElementById('f-desc').focus();document.execCommand(cmd,false,null);updateToolbar();}
+function updateToolbar(){
+  ['bold','italic','underline','strikeThrough'].forEach(cmd=>{
+    const btn=document.querySelector(`.tb-btn[data-cmd="${cmd}"]`);
+    if(btn)btn.classList.toggle('active',document.queryCommandState(cmd));
+  });
+}
+document.getElementById('f-desc').addEventListener('keyup',updateToolbar);
+document.getElementById('f-desc').addEventListener('mouseup',updateToolbar);
+
+function openLinkModal(){
+  const sel=window.getSelection();
+  if(sel&&sel.rangeCount>0)savedSel=sel.getRangeAt(0).cloneRange();
+  document.getElementById('link-url').value='https://';
+  document.getElementById('link-text').value=sel?sel.toString():'';
+  document.getElementById('link-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('link-url').focus(),50);
+}
+function closeLinkModal(){document.getElementById('link-modal').classList.remove('open');}
+function insertLink(){
+  const url=document.getElementById('link-url').value.trim();
+  const text=document.getElementById('link-text').value.trim();
+  if(!url)return;
+  document.getElementById('f-desc').focus();
+  if(savedSel){const sel=window.getSelection();sel.removeAllRanges();sel.addRange(savedSel);}
+  if(text){document.execCommand('insertHTML',false,`<a href="${esc(url)}">${esc(text)}</a>`);}
+  else{document.execCommand('createLink',false,url);}
+  closeLinkModal();
+}
+
+function openModal(col,id){
+  currentCol=col;editingId=id||null;
+  document.getElementById('modal-title').textContent=id?'Edit card':'Add card';
+  if(id&&cards[id]){
+    const c=cards[id];
+    document.getElementById('f-title').value=c.title;
+    document.getElementById('f-desc').innerHTML=c.desc;
+    document.getElementById('f-due').value=c.due;
+    selectedColor=c.color;
+  } else {
+    document.getElementById('f-title').value='';
+    document.getElementById('f-desc').innerHTML='';
+    document.getElementById('f-due').value='';
+    selectedColor=COLORS[1].hex;
+  }
+  document.querySelectorAll('.color-swatch').forEach((s,i)=>{s.classList.toggle('selected',COLORS[i].hex===selectedColor);});
+  document.getElementById('modal-bg').classList.add('open');
+  setTimeout(()=>document.getElementById('f-title').focus(),50);
+}
+function closeModal(){document.getElementById('modal-bg').classList.remove('open');editingId=null;}
+
+function saveCard(){
+  const title=document.getElementById('f-title').value.trim();
+  if(!title){document.getElementById('f-title').focus();return;}
+  const id=editingId||'card-'+Date.now();
+  cards[id]={id,col:currentCol,title,desc:document.getElementById('f-desc').innerHTML,due:document.getElementById('f-due').value,color:selectedColor};
+  closeModal();renderAll();persist();
+}
+function deleteCard(id){if(!confirm('Delete this card?'))return;delete cards[id];renderAll();persist();}
+
+function formatDate(d){if(!d)return'';const[y,m,day]=d.split('-');return`${m}/${day}/${y}`;}
+function isOverdue(d){if(!d)return false;return new Date(d)<new Date(new Date().toDateString());}
+
+function renderAll(){
+  ['not-started','in-progress','needs-req','finished'].forEach(col=>{
+    const el=document.getElementById('cards-'+col);
+    const colCards=Object.values(cards).filter(c=>c.col===col);
+    document.getElementById('cnt-'+col).textContent=colCards.length;
+    el.innerHTML='';
+    colCards.forEach(c=>{
+      const div=document.createElement('div');
+      div.className='card';div.draggable=true;div.dataset.id=c.id;
+      div.style.borderLeftColor=c.color;
+      div.ondragstart=e=>{dragId=c.id;div.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
+      div.ondragend=()=>div.classList.remove('dragging');
+      const overdue=isOverdue(c.due);
+      const descClean=c.desc&&c.desc!=='<br>'?c.desc:'';
+      div.innerHTML=`<div class="card-actions"><button class="card-btn" onclick="openModal('${c.col}','${c.id}')" title="Edit">✎</button><button class="card-btn" onclick="deleteCard('${c.id}')" title="Delete">✕</button></div><div class="card-title">${esc(c.title)}</div>${descClean?`<div class="card-desc">${descClean}</div>`:''} ${c.due?`<div class="card-due${overdue?' overdue':''}">${overdue?'Overdue · ':'Due '}${formatDate(c.due)}</div>`:''}`;
+      el.appendChild(div);
+    });
+  });
+}
+
+function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function onDragOver(e){e.preventDefault();document.getElementById('dz-'+e.currentTarget.dataset.col).classList.add('visible');}
+function onDragLeave(e){if(!e.currentTarget.contains(e.relatedTarget))document.getElementById('dz-'+e.currentTarget.dataset.col).classList.remove('visible');}
+function onDrop(e,col){
+  e.preventDefault();
+  document.getElementById('dz-'+col).classList.remove('visible');
+  if(dragId&&cards[dragId]){cards[dragId].col=col;renderAll();persist();}
+  dragId=null;
+}
+
+document.getElementById('modal-bg').addEventListener('click',e=>{if(e.target===document.getElementById('modal-bg'))closeModal();});
+document.getElementById('link-modal').addEventListener('click',e=>{if(e.target===document.getElementById('link-modal'))closeLinkModal();});
+
+function persist(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(cards));
+    const ind=document.getElementById('save-ind');
+    ind.textContent='Saved';
+    setTimeout(()=>ind.textContent='',1800);
+  }catch(e){console.warn('localStorage unavailable');}
+}
+function load(){
+  try{const raw=localStorage.getItem(STORAGE_KEY);if(raw)cards=JSON.parse(raw);}catch(e){}
+  renderAll();
+}
+
+load();
+</script>
+</body>
+</html>
